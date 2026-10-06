@@ -3,15 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import { useState, useEffect } from 'react';
 import { WebhookConfig, WebhookLog } from './types';
 import { getConfigs, saveConfig, deleteConfig, getLogs, addLog } from './lib/storage';
 import WebhookDetailModal from './components/WebhookDetailModal';
+import HottokModal from './components/HottokModal';
 
 export default function App() {
   const [configs, setConfigs] = useState<WebhookConfig[]>([]);
@@ -19,7 +15,15 @@ export default function App() {
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'welcome' | 'form'>('welcome');
   const [selectedLog, setSelectedLog] = useState<WebhookLog | null>(null);
+  const [showHottokModal, setShowHottokModal] = useState(false);
   
+  const generateNewHottok = () => {
+    const randomHex = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    return `E1${randomHex}-${crypto.randomUUID()}`;
+  };
+
   const [config, setConfig] = useState<Partial<WebhookConfig>>({
     name: '',
     url: '',
@@ -36,7 +40,7 @@ export default function App() {
       planName: 'Mensual',
       price: 654.00,
       currency: 'BOB',
-      hottok: 'E1Te5pEzHpXB4eO9pI2pmYA8iaLjxu11a5d585-39bd-42cf-85af-56d0035dec47'
+      hottok: generateNewHottok()
     }
   });
   const [statusMessage, setStatusMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
@@ -60,7 +64,10 @@ export default function App() {
       name: config.name!,
       url: config.url!,
       events: config.events || [],
-      buyerData: config.buyerData!
+      buyerData: {
+        ...config.buyerData!,
+        hottok: config.buyerData?.hottok || generateNewHottok()
+      }
     };
     saveConfig(newConfig);
     setSelectedConfigId(newConfig.id);
@@ -84,7 +91,7 @@ export default function App() {
           planName: 'Mensual',
           price: 654.00,
           currency: 'BOB',
-          hottok: 'E1Te5pEzHpXB4eO9pI2pmYA8iaLjxu11a5d585-39bd-42cf-85af-56d0035dec47'
+          hottok: generateNewHottok()
         }
       });
       setSelectedConfigId(null);
@@ -167,6 +174,7 @@ export default function App() {
             creation_date: Date.now(),
             event: event,
             version: "2.0.0",
+            hottok: conf.buyerData.hottok,
             data: {
                 actual_recurrence_value: 0,
                 cancellation_date: Date.now(),
@@ -209,6 +217,7 @@ export default function App() {
             creation_date: Date.now(),
             event: event,
             version: "2.0.0",
+            hottok: conf.buyerData.hottok,
             data: {
                 switch_plan_date: Date.now(),
                 subscription: {
@@ -325,6 +334,7 @@ export default function App() {
             creation_date: Date.now(),
             event: event,
             version: "2.0.0",
+            hottok: conf.buyerData.hottok,
             data: {
                 product: {
                     id: 0,
@@ -401,6 +411,7 @@ export default function App() {
             creation_date: Date.now(),
             event: event,
             version: "2.0.0",
+            hottok: conf.buyerData.hottok,
             data: {
                 product: {
                     id: 0,
@@ -477,6 +488,7 @@ export default function App() {
             creation_date: Date.now(),
             event: event,
             version: "2.0.0",
+            hottok: conf.buyerData.hottok,
             data: {
                 product: {
                     id: 0,
@@ -553,6 +565,7 @@ export default function App() {
             creation_date: Date.now(),
             event: event,
             version: "2.0.0",
+            hottok: conf.buyerData.hottok,
             data: {
                 product: {
                     id: 0,
@@ -646,7 +659,7 @@ export default function App() {
         body: JSON.stringify(payload),
       });
       
-      const data = await response.json();
+      const data = await response.json().catch(() => ({ message: 'Respuesta sin JSON válido' }));
       const duration = Math.round(performance.now() - start);
       
       const log: WebhookLog = {
@@ -703,12 +716,12 @@ export default function App() {
               planName: 'Mensual',
               price: 654.00,
               currency: 'BOB',
-              hottok: 'E1Te5pEzHpXB4eO9pI2pmYA8iaLjxu11a5d585-39bd-42cf-85af-56d0035dec47'
+              hottok: generateNewHottok()
             }
           });
           setSelectedConfigId(null);
           setActiveView('form');
-        }} className="w-full bg-[#e94560] text-white py-2 rounded font-medium hover:brightness-110 transition mb-6">
+        }} className="w-full bg-[#e94560] text-white py-2 rounded font-medium hover:brightness-110 transition mb-6 shadow">
           + Nueva Configuración
         </button>
 
@@ -722,8 +735,11 @@ export default function App() {
                 onClick={() => { setSelectedConfigId(c.id); setActiveView('welcome'); }}
                 className={`p-3 rounded cursor-pointer transition ${selectedConfigId === c.id ? 'bg-[#0f3460] border-l-4 border-[#e94560]' : 'hover:bg-[#0f3460] border-l-4 border-transparent'}`}
               >
-                <p className="font-medium">{c.name}</p>
-                <p className="text-xs text-[#b2bec3] truncate">{c.url}</p>
+                <div className="flex justify-between items-center">
+                  <p className="font-medium truncate">{c.name}</p>
+                  <span className="text-[10px] bg-[#1a1a2e] px-1.5 py-0.5 rounded text-[#a29bfe] font-mono shrink-0">Hottok 🔒</span>
+                </div>
+                <p className="text-xs text-[#b2bec3] truncate mt-1">{c.url}</p>
               </div>
             ))
           )}
@@ -732,88 +748,126 @@ export default function App() {
 
       <main className="flex-grow p-8 overflow-y-auto">
         {activeView === 'form' ? (
-          <div className="space-y-6">
+          <div className="space-y-6 max-w-4xl mx-auto">
             <h2 className="text-2xl font-bold">{selectedConfigId ? 'Editar' : 'Nueva'} Configuración</h2>
             <div className="bg-[#1a1a2e] p-6 rounded-lg border border-gray-800 space-y-4">
               <h3 className="text-lg font-semibold border-b border-gray-700 pb-2">Datos básicos</h3>
-              <input type="text" placeholder="Nombre *" value={config.name} onChange={e => setConfig({...config, name: e.target.value})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
-              <input type="url" placeholder="URL del Webhook (Access Point) *" value={config.url} onChange={e => setConfig({...config, url: e.target.value})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
+              <div>
+                <label className="block text-xs text-[#b2bec3] mb-1">Nombre de la configuración *</label>
+                <input type="text" placeholder="Ej: Mi Servidor en Producción" value={config.name || ''} onChange={e => setConfig({...config, name: e.target.value})} className="w-full p-2.5 bg-[#0f0f0f] border border-gray-700 rounded text-white" />
+              </div>
+              <div>
+                <label className="block text-xs text-[#b2bec3] mb-1">URL del Webhook (Access Point) *</label>
+                <input type="url" placeholder="https://mi-api.com/webhook/hotmart" value={config.url || ''} onChange={e => setConfig({...config, url: e.target.value})} className="w-full p-2.5 bg-[#0f0f0f] border border-gray-700 rounded text-white" />
+              </div>
+            </div>
+
+            <div className="bg-[#1a1a2e] p-6 rounded-lg border border-gray-800 space-y-4">
+              <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+                <h3 className="text-lg font-semibold">🔒 Hottok de Verificación y Seguridad</h3>
+                <button 
+                  type="button"
+                  onClick={() => setConfig({
+                    ...config,
+                    buyerData: {
+                      ...config.buyerData!,
+                      hottok: generateNewHottok()
+                    }
+                  })}
+                  className="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs font-bold transition"
+                >
+                  🔄 Generar nuevo Hottok
+                </button>
+              </div>
+              <p className="text-xs text-gray-300">
+                Este token de seguridad se enviará en el header <code className="text-[#a29bfe]">X-Hotmart-Hottok</code> y en el payload para que tu backend pueda verificar que el evento es auténtico.
+              </p>
+              <div>
+                <label className="block text-xs text-[#b2bec3] mb-1">Hottok (Token de verificación)</label>
+                <input 
+                  type="text" 
+                  value={config.buyerData?.hottok || ''} 
+                  onChange={e => setConfig({...config, buyerData: {...config.buyerData!, hottok: e.target.value}})} 
+                  className="w-full p-2.5 bg-[#0f0f0f] border border-gray-700 rounded font-mono text-sm text-[#55efc4]" 
+                />
+              </div>
             </div>
 
             <div className="bg-[#1a1a2e] p-6 rounded-lg border border-gray-800 space-y-4">
               <h3 className="text-lg font-semibold border-b border-gray-700 pb-2">Eventos a simular *</h3>
-              <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="grid grid-cols-2 gap-3 text-sm">
                 {['PURCHASE_COMPLETE', 'PURCHASEREFUNDREQUEST', 'PURCHASEWAITINGPAYMENT', 'PURCHASE_REFUNDED', 'PURCHASE_APPROVED', 'PURCHASE_EXPIRED', 'PURCHASE_CANCELED', 'PURCHASE_CHARGEBACK', 'SUBSCRIPTION_CANCELLATION', 'PURCHASE_BILLET_PRINTED', 'PURCHASE_PROTEST', 'UPDATE_SUBSCRIPTION_CHARGE_DATE', 'SWITCH_PLAN', 'PURCHASE_DELAYED'].map(evt => (
-                  <label key={evt} className="flex items-center gap-2">
+                  <label key={evt} className="flex items-center gap-2 cursor-pointer bg-[#0f0f0f] p-2.5 rounded border border-gray-800 hover:border-gray-700">
                     <input type="checkbox" checked={config.events?.includes(evt)} onChange={e => {
                       const newEvents = e.target.checked ? [...(config.events || []), evt] : (config.events || []).filter(e => e !== evt);
                       setConfig({...config, events: newEvents});
-                    }} />
-                    {evt}
+                    }} className="accent-[#e94560]" />
+                    <span className="font-mono text-xs">{evt}</span>
                   </label>
                 ))}
               </div>
             </div>
 
             <div className="bg-[#1a1a2e] p-6 rounded-lg border border-gray-800 space-y-4">
-              <button onClick={() => setIsBuyerDataExpanded(!isBuyerDataExpanded)} className="text-lg font-semibold w-full text-left flex justify-between">
-                Datos del comprador simulado <span>{isBuyerDataExpanded ? '▲' : '▼'}</span>
+              <button type="button" onClick={() => setIsBuyerDataExpanded(!isBuyerDataExpanded)} className="text-lg font-semibold w-full text-left flex justify-between items-center">
+                <span>Datos del comprador simulado y transacción</span> 
+                <span className="text-sm">{isBuyerDataExpanded ? '▲' : '▼'}</span>
               </button>
               {isBuyerDataExpanded && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4 pt-2">
                   <div>
                     <label className="block text-xs text-[#b2bec3] mb-1">Nombre completo</label>
-                    <input type="text" value={config.buyerData?.name} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, name: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
+                    <input type="text" value={config.buyerData?.name || ''} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, name: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
                   </div>
                   <div>
                     <label className="block text-xs text-[#b2bec3] mb-1">Email</label>
-                    <input type="email" value={config.buyerData?.email} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, email: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
+                    <input type="email" value={config.buyerData?.email || ''} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, email: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
                   </div>
                   <div>
                     <label className="block text-xs text-[#b2bec3] mb-1">Documento (CPF/DNI)</label>
-                    <input type="text" value={config.buyerData?.document} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, document: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
+                    <input type="text" value={config.buyerData?.document || ''} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, document: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
                   </div>
                   <div>
                     <label className="block text-xs text-[#b2bec3] mb-1">Tipo de documento</label>
-                    <select value={config.buyerData?.documentType} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, documentType: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded">
+                    <select value={config.buyerData?.documentType || 'DNI'} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, documentType: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded">
                       {['CPF', 'CNPJ', 'DNI', 'RUT', 'CC'].map(type => <option key={type} value={type}>{type}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs text-[#b2bec3] mb-1">País (ISO)</label>
-                    <input type="text" value={config.buyerData?.country} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, country: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
+                    <input type="text" value={config.buyerData?.country || ''} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, country: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
                   </div>
                   <div>
                     <label className="block text-xs text-[#b2bec3] mb-1">Ciudad</label>
-                    <input type="text" value={config.buyerData?.city} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, city: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
+                    <input type="text" value={config.buyerData?.city || ''} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, city: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
                   </div>
                   <div>
                     <label className="block text-xs text-[#b2bec3] mb-1">Nombre del producto</label>
-                    <input type="text" value={config.buyerData?.productName} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, productName: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
+                    <input type="text" value={config.buyerData?.productName || ''} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, productName: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
                   </div>
                   <div>
                     <label className="block text-xs text-[#b2bec3] mb-1">Nombre del plan</label>
-                    <select value={config.buyerData?.planName} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, planName: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded">
+                    <select value={config.buyerData?.planName || 'Mensual'} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, planName: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded">
                       {['3 Días', '7 Días', 'Mensual', 'Semestral', 'Anual'].map(plan => <option key={plan} value={plan}>{plan}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs text-[#b2bec3] mb-1">Precio</label>
-                    <input type="number" value={config.buyerData?.price} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, price: parseFloat(e.target.value)}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
+                    <input type="number" value={config.buyerData?.price || 0} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, price: parseFloat(e.target.value) || 0}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded" />
                   </div>
                   <div>
                     <label className="block text-xs text-[#b2bec3] mb-1">Moneda</label>
-                    <select value={config.buyerData?.currency} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, currency: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded">
-                      {['BRL', 'USD', 'MXN', 'COP', 'ARS', 'CLP', 'PEN'].map(cur => <option key={cur} value={cur}>{cur}</option>)}
+                    <select value={config.buyerData?.currency || 'USD'} onChange={e => setConfig({...config, buyerData: {...config.buyerData!, currency: e.target.value}})} className="w-full p-2 bg-[#0f0f0f] border border-gray-700 rounded">
+                      {['BRL', 'USD', 'MXN', 'COP', 'ARS', 'CLP', 'PEN', 'BOB'].map(cur => <option key={cur} value={cur}>{cur}</option>)}
                     </select>
                   </div>
                 </div>
               )}
             </div>
             
-            <div className="flex gap-4">
-              <button onClick={handleSaveConfig} className="bg-[#e94560] px-6 py-2 rounded font-bold hover:brightness-110">💾 Guardar Configuración</button>
-              <button onClick={() => setActiveView('welcome')} className="bg-gray-700 px-6 py-2 rounded hover:bg-gray-600">✖ Cancelar</button>
+            <div className="flex gap-4 pt-2">
+              <button onClick={handleSaveConfig} className="bg-[#e94560] px-6 py-2.5 rounded font-bold hover:brightness-110 transition shadow">💾 Guardar Configuración</button>
+              <button onClick={() => setActiveView('welcome')} className="bg-gray-700 px-6 py-2.5 rounded hover:bg-gray-600 transition">✖ Cancelar</button>
             </div>
             {statusMessage && (
               <div className={`p-4 rounded ${statusMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white`}>
@@ -825,7 +879,7 @@ export default function App() {
           <div className="h-full flex flex-col items-center justify-center text-center">
             <span className="text-6xl mb-6">🔥</span>
             <h2 className="text-3xl font-bold mb-2">Hotmart Webhook Simulator</h2>
-            <p className="text-[#b2bec3] max-w-md mb-8">Simula el envío de webhooks de Hotmart a tu Access Point para probar tus integraciones sin realizar compras reales.</p>
+            <p className="text-[#b2bec3] max-w-md mb-8">Simula el envío de webhooks de Hotmart a tu Access Point y publica tu Hottok de verificación para probar tus integraciones con máxima seguridad.</p>
             <button onClick={() => {
               setConfig({
                 name: '',
@@ -843,74 +897,128 @@ export default function App() {
                   planName: 'Mensual',
                   price: 654.00,
                   currency: 'BOB',
-                  hottok: 'E1Te5pEzHpXB4eO9pI2pmYA8iaLjxu11a5d585-39bd-42cf-85af-56d0035dec47'
+                  hottok: generateNewHottok()
                 }
               });
               setSelectedConfigId(null);
               setActiveView('form');
-            }} className="bg-[#e94560] text-white px-6 py-3 rounded font-medium hover:brightness-110 transition">→ {configs.length > 0 ? "Crear nueva configuración" : "Crear primera configuración"}</button>
+            }} className="bg-[#e94560] text-white px-6 py-3 rounded font-medium hover:brightness-110 transition shadow">→ {configs.length > 0 ? "Crear nueva configuración" : "Crear primera configuración"}</button>
           </div>
         ) : (
           <div className="space-y-8">
-            <header className="bg-[#1a1a2e] p-6 rounded-lg border border-gray-800 flex justify-between items-center">
+            <header className="bg-[#1a1a2e] p-6 rounded-lg border border-gray-800 flex justify-between items-center shadow">
               <div>
                 <h2 className="text-2xl font-bold">{selectedConfig.name}</h2>
-                <a href={selectedConfig.url} target="_blank" className="text-[#a29bfe] text-sm hover:underline flex items-center gap-1">🔗 {selectedConfig.url}</a>
+                <a href={selectedConfig.url} target="_blank" rel="noreferrer" className="text-[#a29bfe] text-sm hover:underline flex items-center gap-1 mt-1">🔗 {selectedConfig.url}</a>
               </div>
-              <button onClick={() => { setConfig(selectedConfig); setActiveView('form'); }} className="bg-[#1a1a2e] border border-gray-700 px-4 py-2 rounded hover:bg-gray-700">✏️ Editar</button>
+              <button onClick={() => { setConfig(selectedConfig); setActiveView('form'); }} className="bg-[#1a1a2e] border border-gray-700 px-4 py-2 rounded hover:bg-gray-700 transition">✏️ Editar</button>
             </header>
 
-            <div className="bg-[#fdcb6e] p-4 rounded-lg text-[#0f0f0f] flex justify-between items-center">
-              <p className="text-sm font-medium">⚠️ Si ves errores CORS, tu servidor debe aceptar peticiones desde este origen. Habilita los headers: Access-Control-Allow-Origin: * y Access-Control-Allow-Methods: POST</p>
-              <button onClick={(e) => (e.target as HTMLElement).parentElement?.remove()} className="font-bold">✕</button>
+            {/* Hottok Publication & Verification Card */}
+            <div className="bg-gradient-to-r from-[#16213e] to-[#1a1a2e] p-6 rounded-lg border border-[#e94560]/30 shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🔒</span>
+                  <h3 className="text-lg font-bold">Hottok de Verificación Publicado</h3>
+                  <span className="bg-[#00b894]/20 text-[#00b894] px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">Activo</span>
+                </div>
+                <p className="text-xs text-gray-300">
+                  Header requerido en tu backend: <code className="text-[#a29bfe]">X-Hotmart-Hottok: {selectedConfig.buyerData.hottok}</code>
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(selectedConfig.buyerData.hottok);
+                    alert('¡Hottok copiado al portapapeles!');
+                  }}
+                  className="bg-[#00b894] hover:brightness-110 text-white px-4 py-2 rounded text-xs font-bold transition shadow"
+                >
+                  📋 Copiar Hottok
+                </button>
+                <button 
+                  onClick={() => setShowHottokModal(true)}
+                  className="bg-[#e94560] hover:brightness-110 text-white px-4 py-2 rounded text-xs font-bold transition shadow"
+                >
+                  💻 Ver Código Backend
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-[#fdcb6e] p-4 rounded-lg text-[#0f0f0f] flex justify-between items-center shadow">
+              <p className="text-sm font-medium">⚠️ Si ves errores CORS, tu servidor debe aceptar peticiones desde este origen. Habilita los headers: <code className="font-mono bg-black/10 px-1 py-0.5 rounded">Access-Control-Allow-Origin: *</code> y <code className="font-mono bg-black/10 px-1 py-0.5 rounded">Access-Control-Allow-Methods: POST, OPTIONS</code></p>
+              <button onClick={(e) => (e.target as HTMLElement).parentElement?.remove()} className="font-bold ml-2">✕</button>
             </div>
 
             <section>
-              <h3 className="text-lg font-semibold mb-4">Eventos disponibles</h3>
+              <h3 className="text-lg font-semibold mb-4">Eventos disponibles para simular</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {selectedConfig.events.map(evt => (
-                  <div key={evt} className="bg-[#1a1a2e] p-4 rounded-lg border border-gray-800">
-                    <p className="font-bold">{evt}</p>
-                    <button onClick={() => handleSend(selectedConfig, evt)} className="mt-4 bg-[#e94560] w-full py-2 rounded text-sm font-bold">▶ Enviar</button>
+                  <div key={evt} className="bg-[#1a1a2e] p-4 rounded-lg border border-gray-800 hover:border-gray-700 transition shadow flex flex-col justify-between">
+                    <div>
+                      <p className="font-mono text-xs font-bold text-[#55efc4] mb-1">{evt}</p>
+                      <p className="text-xs text-gray-400">Envía simulación firmada con Hottok.</p>
+                    </div>
+                    <button onClick={() => handleSend(selectedConfig, evt)} className="mt-4 bg-[#e94560] hover:brightness-110 w-full py-2 rounded text-sm font-bold transition shadow">▶ Enviar Webhook</button>
                   </div>
                 ))}
               </div>
             </section>
 
-            <section>
+            <section className="bg-[#1a1a2e] p-6 rounded-lg border border-gray-800 shadow">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">📋 Historial de Envíos</h3>
-                <button onClick={() => { localStorage.removeItem('hotmart_webhook_logs'); setLogs([]); }} className="text-sm text-red-400 hover:underline">🗑 Limpiar historial</button>
+                {logs.filter(l => l.webhookId === selectedConfigId).length > 0 && (
+                  <button onClick={() => { 
+                    const newLogs = logs.filter(l => l.webhookId !== selectedConfigId);
+                    localStorage.setItem('hotmart_webhook_logs', JSON.stringify(newLogs));
+                    setLogs(getLogs());
+                  }} className="text-xs text-red-400 hover:underline">🗑 Limpiar historial</button>
+                )}
               </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[#b2bec3]">
-                    <th className="p-2">Envío #</th>
-                    <th className="p-2">Fecha</th>
-                    <th className="p-2">Evento</th>
-                    <th className="p-2">Status</th>
-                    <th className="p-2">Tiempo</th>
-                    <th className="p-2">Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.filter(l => l.webhookId === selectedConfigId).map((log, index) => (
-                    <tr key={log.id} className="border-t border-gray-800">
-                      <td className="p-2">Envío {logs.filter(l => l.webhookId === selectedConfigId).length - index}</td>
-                      <td className="p-2">{new Date(log.timestamp).toLocaleString()}</td>
-                      <td className="p-2">{log.event}</td>
-                      <td className="p-2">
-                        <span className={`px-2 py-1 rounded text-xs font-bold ${log.status === 'success' ? 'bg-[#00b894]' : 'bg-[#d63031]'}`}>{log.status}</span>
-                      </td>
-                      <td className="p-2">{log.duration} ms</td>
-                      <td className="p-2">
-                        <button onClick={() => setSelectedLog(log)} className="text-[#a29bfe] hover:underline mr-2">👁 Detalle</button>
-                        {log.status === 'failure' && <button onClick={() => handleSend(selectedConfig, log.event)} className="text-[#fdcb6e] hover:underline">🔄</button>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {logs.filter(l => l.webhookId === selectedConfigId).length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">No hay envíos registrados para esta configuración. Haz clic en "Enviar Webhook" arriba.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[#b2bec3] border-b border-gray-800">
+                        <th className="p-3">Envío</th>
+                        <th className="p-3">Fecha y Hora</th>
+                        <th className="p-3">Evento</th>
+                        <th className="p-3">Hottok Header</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3">Tiempo</th>
+                        <th className="p-3">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logs.filter(l => l.webhookId === selectedConfigId).map((log, index) => {
+                        const allLogsForConf = logs.filter(l => l.webhookId === selectedConfigId);
+                        const sendNumber = allLogsForConf.length - index;
+                        return (
+                          <tr key={log.id} className="border-t border-gray-800/60 hover:bg-[#0f0f0f]/40">
+                            <td className="p-3 font-mono text-xs">#{sendNumber}</td>
+                            <td className="p-3 text-xs text-gray-300">{new Date(log.timestamp).toLocaleString()}</td>
+                            <td className="p-3 font-mono text-xs text-[#a29bfe]">{log.event}</td>
+                            <td className="p-3 font-mono text-[10px] text-gray-400 truncate max-w-[150px]" title={log.request?.headers?.['X-Hotmart-Hottok']}>
+                              {log.request?.headers?.['X-Hotmart-Hottok'] || 'N/A'}
+                            </td>
+                            <td className="p-3">
+                              <span className={`px-2 py-1 rounded text-xs font-bold ${log.status === 'success' ? 'bg-[#00b894] text-white' : 'bg-[#d63031] text-white'}`}>{log.status}</span>
+                            </td>
+                            <td className="p-3 text-xs">{log.duration} ms</td>
+                            <td className="p-3">
+                              <button onClick={() => setSelectedLog(log)} className="text-[#a29bfe] hover:underline mr-3 text-xs font-semibold">👁 Detalle</button>
+                              <button onClick={() => handleSend(selectedConfig, log.event)} className="text-[#fdcb6e] hover:underline text-xs font-semibold">🔄 Reintentar</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
           </div>
         )}
@@ -919,6 +1027,24 @@ export default function App() {
             log={selectedLog} 
             onClose={() => setSelectedLog(null)} 
             onRetry={() => { handleSend(selectedConfig!, selectedLog.event); setSelectedLog(null); }} 
+          />
+        )}
+        {showHottokModal && selectedConfig && (
+          <HottokModal 
+            hottok={selectedConfig.buyerData.hottok} 
+            onClose={() => setShowHottokModal(false)}
+            onRegenerate={() => {
+              const newH = generateNewHottok();
+              const updated = {
+                ...selectedConfig,
+                buyerData: {
+                  ...selectedConfig.buyerData,
+                  hottok: newH
+                }
+              };
+              saveConfig(updated);
+              setConfigs(getConfigs());
+            }}
           />
         )}
       </main>
